@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:exam_cell_mobile_app/main.dart';
+import 'package:intl/intl.dart';
 import 'login_page.dart';
 import 'dart:async';
 
@@ -134,18 +135,18 @@ class StudentDashboardState extends State<StudentDashboard> {
             children: [
               IconButton(
                   onPressed: () {
-                    /* Navigator.of(context).pushAndRemoveUntil(
+                    Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
                           builder: (context) => const LoginPage()),
                       (route) => false,
-                    ); */
-                    Navigator.of(context).pushAndRemoveUntil(
+                    );
+                    /* Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
                           builder: (context) => const SplashScreen()),
                       (route) => false,
-                    );
+                    ); */
                   },
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.logout_outlined,
                     size: 20,
                     color: Colors.redAccent,
@@ -383,30 +384,73 @@ class StudentDashboardState extends State<StudentDashboard> {
                       ),
                     ),
                     const SizedBox(height: 5),
-                    if (widget.userAlloc.isNotEmpty)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: <Widget>[
-                          for (var i = 0; i < widget.userAlloc.length; i++)
-                            dateButton(
-                              widget.userAlloc[i]['date'].split('-').last,
-                              widget.userAlloc[i]['day'].substring(0, 3),
-                              true,
-                              () {
-                                setState(() {
-                                  if (selectedDateIndex == i) {
-                                    showInvigilationInfo =
-                                        !showInvigilationInfo;
-                                  } else {
-                                    showInvigilationInfo = true;
-                                  }
-                                  selectedDateIndex = i;
-                                });
-                              },
-                            ),
-                        ],
+                    if (widget.userAlloc.isNotEmpty &&
+                        (widget.userAlloc.any((allocation) =>
+                                DateTime.parse(allocation['date'])
+                                    .isAfter(DateTime.now())) ||
+                            widget.userAlloc.any((allocation) =>
+                                DateTime.parse(allocation['date']).year ==
+                                    DateTime.now().year &&
+                                DateTime.parse(allocation['date']).month ==
+                                    DateTime.now().month &&
+                                DateTime.parse(allocation['date']).day ==
+                                    DateTime.now().day &&
+                                DateTime.now().hour < 14)))
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: <Widget>[
+                            for (var i = 0; i < widget.userAlloc.length; i++)
+                              Visibility(
+                                visible: (DateTime.parse(
+                                            widget.userAlloc[i]['date'])
+                                        .isAfter(DateTime.now()) ||
+                                    DateTime.parse(widget.userAlloc[i]['date'])
+                                                .year ==
+                                            DateTime.now().year && // Exam today
+                                        DateTime.parse(
+                                                    widget.userAlloc[i]['date'])
+                                                .month ==
+                                            DateTime.now().month &&
+                                        DateTime.parse(
+                                                    widget.userAlloc[i]['date'])
+                                                .day ==
+                                            DateTime.now().day &&
+                                        DateTime.now().hour < 14),
+                                child: dateButton(
+                                  widget.userAlloc[i]['date'],
+                                  widget.userAlloc[i]['date'].split('-').last,
+                                  widget.userAlloc[i]['day'].substring(0, 3),
+                                  true,
+                                  () {
+                                    setState(() {
+                                      if (selectedDateIndex == i) {
+                                        showInvigilationInfo =
+                                            !showInvigilationInfo;
+                                      } else {
+                                        showInvigilationInfo = true;
+                                      }
+                                      selectedDateIndex = i;
+                                    });
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    if (widget.userAlloc.isEmpty)
+                    if (widget.userAlloc.isEmpty || // List is empty
+                        !widget.userAlloc.any((allocation) =>
+                            DateTime.parse(allocation['date'])
+                                .isAfter(DateTime.now()) || // No future exams
+                            (DateTime.parse(allocation['date']).year ==
+                                    DateTime.now()
+                                        .year && // No exams today before 6 PM
+                                DateTime.parse(allocation['date']).month ==
+                                    DateTime.now().month &&
+                                DateTime.parse(allocation['date']).day ==
+                                    DateTime.now().day &&
+                                DateTime.now().hour < 18)))
                       const Padding(
                         padding: EdgeInsets.only(top: 5),
                         child: Text(
@@ -568,7 +612,7 @@ class StudentDashboardState extends State<StudentDashboard> {
                                   right: containerWidth * 0.1),
                               child: Center(
                                 child: ListView(
-                                  physics: NeverScrollableScrollPhysics(),
+                                  physics: const NeverScrollableScrollPhysics(),
                                   shrinkWrap: true,
                                   children: [
                                     const SizedBox(height: 20),
@@ -619,7 +663,7 @@ class StudentDashboardState extends State<StudentDashboard> {
                             ),
                             const SizedBox(height: 20),
                             ListView.builder(
-                              physics: NeverScrollableScrollPhysics(),
+                              physics: const NeverScrollableScrollPhysics(),
                               shrinkWrap: true,
                               itemCount: widget.userNotify.length,
                               itemBuilder: (context, index) {
@@ -655,10 +699,10 @@ class StudentDashboardState extends State<StudentDashboard> {
   }
 }
 
-Widget dateButton(
-    String date, String day, bool isHighlighted, Function() onPressed) {
+Widget dateButton(String fullDate, String date, String day, bool isHighlighted,
+    Function() onPressed) {
   return Padding(
-      padding: EdgeInsets.fromLTRB(0, 0, 10, 0),
+      padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
       child: Container(
         decoration: isHighlighted
             ? BoxDecoration(
@@ -668,6 +712,7 @@ Widget dateButton(
             : null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             TextButton(
@@ -685,12 +730,40 @@ Widget dateButton(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text(
+                  /* Text(
                     date,
                     style: const TextStyle(
                       color: Colors.black,
                       fontSize: 30,
                       fontWeight: FontWeight.w500,
+                    ),
+                  ), */
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: RichText(
+                      textAlign: TextAlign.center, // Center the text
+                      text: TextSpan(
+                        style: const TextStyle(
+                          color: Color(0xFF242424),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        children: <TextSpan>[
+                          TextSpan(
+                            text: DateFormat(
+                                    'MMM') // Abbreviated month (e.g., JAN)
+                                .format(DateTime.parse(fullDate))
+                                .toUpperCase(),
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(
+                            text:
+                                '\n${date.padLeft(2, '0')}', // Day of the month with padding
+                            style: const TextStyle(
+                                fontSize: 30, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   Text(

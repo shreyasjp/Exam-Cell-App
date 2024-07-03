@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'login_page.dart';
-import 'package:exam_cell_mobile_app/main.dart';
+//import 'package:exam_cell_mobile_app/main.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -18,16 +18,18 @@ void main() {
             userPrn: '',
             userNotify: [],
             userAlloc: [],
-            exchangeRequest: []);
+            exchangeRequest: [],
+            hostURL: '');
       },
     ),
   ));
 }
 
-Future<void> markAttendance(String prn, int status, int examId) async {
+Future<void> markAttendance(
+    String prn, int status, int examId, String hostURL) async {
   try {
     final response = await http.post(
-      Uri.parse('http://192.168.1.16:8000/attendance/'),
+      Uri.parse('$hostURL/attendance/'),
       body: {
         'prn': prn,
         'status': status.toString(),
@@ -53,8 +55,8 @@ class TeacherDashboard extends StatefulWidget {
   final String userPrn;
   final List<String> userNotify;
   final List<Map<String, dynamic>> userAlloc;
-
   final List<dynamic> exchangeRequest;
+  final String hostURL;
 
   const TeacherDashboard({
     Key? key,
@@ -65,6 +67,7 @@ class TeacherDashboard extends StatefulWidget {
     required this.userNotify,
     required this.userAlloc,
     required this.exchangeRequest,
+    required this.hostURL,
   }) : super(key: key);
 
   @override
@@ -125,6 +128,9 @@ class CustomLoadingScreenState extends State<CustomLoadingScreen> {
 }
 
 class TeacherDashboardState extends State<TeacherDashboard> {
+  bool previousDutyErrorMessageExist = false;
+  bool loadingExchangeList = false;
+  bool examDataLoading = false;
   bool showInvigilationInfo = false;
   late Future<void> _loadingFuture;
   int selectedDateIndex = 0;
@@ -148,7 +154,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
     List prn = widget.userAlloc[selectedDateIndex]['student_prns'];
 
     final response = await http.post(
-      Uri.parse('http://192.168.1.16:8000/attendance/status/'),
+      Uri.parse('${widget.hostURL}/attendance/status/'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'prn': prn,
@@ -173,7 +179,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
 
   Future<void> grabTeacherNames(selectedDateIndex) async {
     final response = await http.post(
-      Uri.parse('http://192.168.1.16:8000/grab_teacher_names/'),
+      Uri.parse('${widget.hostURL}/grab_teacher_names/'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'user_id': widget.userPrn,
@@ -224,18 +230,18 @@ class TeacherDashboardState extends State<TeacherDashboard> {
             children: [
               IconButton(
                   onPressed: () {
-                    /* Navigator.of(context).pushAndRemoveUntil(
+                    Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
                           builder: (context) => const LoginPage()),
                       (route) => false,
-                    ); */
-                    Navigator.of(context).pushAndRemoveUntil(
+                    );
+                    /* Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
                           builder: (context) => const SplashScreen()),
                       (route) => false,
-                    );
+                    ); */
                   },
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.logout_outlined,
                     color: Colors.redAccent,
                     size: 20,
@@ -378,7 +384,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                         ),
                                       ),
                                       Padding(
-                                        padding: EdgeInsets.only(
+                                        padding: const EdgeInsets.only(
                                             left: 15,
                                             top: 0,
                                             right: 0,
@@ -426,7 +432,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                         ),
                                       ),
                                       Padding(
-                                        padding: EdgeInsets.only(
+                                        padding: const EdgeInsets.only(
                                             left: 15,
                                             top: 0,
                                             right: 0,
@@ -468,7 +474,19 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                         fontFamily: 'Raleway',
                       ),
                     ),
-                    if (widget.userAlloc.length > 0)
+                    if (widget.userAlloc.isNotEmpty &&
+                        (widget.userAlloc.any((allocation) =>
+                                DateTime.parse(allocation['date']).isAfter(
+                                    DateTime.now())) || // Exam in the future
+                            widget.userAlloc.any((allocation) =>
+                                    DateTime.parse(allocation['date']).year ==
+                                        DateTime.now().year && // Exam today
+                                    DateTime.parse(allocation['date']).month ==
+                                        DateTime.now().month &&
+                                    DateTime.parse(allocation['date']).day ==
+                                        DateTime.now().day &&
+                                    DateTime.now().hour < 18 // Before 6 PM
+                                )))
                       Column(
                         children: [
                           const SizedBox(height: 20),
@@ -484,44 +502,150 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal:
                                             8), // Adjust the horizontal spacing as needed
-                                    child: dateButton(
-                                      widget.userAlloc[i]['date']
-                                          .split('-')
-                                          .last, // Display only the day part
-                                      widget.userAlloc[i]['day'].substring(
-                                          0, 3), // Function to get day of week
-                                      true, // Assuming this value should always be true
-                                      () {
-                                        setState(() {
-                                          if (selectedDateIndex == i) {
-                                            showInvigilationInfo =
-                                                !showInvigilationInfo;
-                                            fetchInitialAttendanceStatus(
-                                                selectedDateIndex);
-                                            initializeCardVisibility(
-                                                selectedDateIndex);
-                                            grabTeacherNames(selectedDateIndex);
-                                          } else {
-                                            showInvigilationInfo = true;
-                                            fetchInitialAttendanceStatus(
-                                                selectedDateIndex);
-                                            initializeCardVisibility(
-                                                selectedDateIndex);
-                                            grabTeacherNames(selectedDateIndex);
-                                          }
-                                        });
-                                      },
-                                    ),
+                                    child: examDataLoading
+                                        ? Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                0, 0, 10, 0),
+                                            child: Container(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: <Widget>[
+                                                  TextButton(
+                                                      onPressed: () {},
+                                                      style:
+                                                          TextButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                                top: 10,
+                                                                bottom: 10,
+                                                                left: 15,
+                                                                right: 15),
+                                                        minimumSize: const Size(
+                                                            100, 105),
+                                                        tapTargetSize:
+                                                            MaterialTapTargetSize
+                                                                .shrinkWrap,
+                                                        backgroundColor:
+                                                            const Color(
+                                                                0xFFA0E4C3),
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(10),
+                                                        ),
+                                                      ),
+                                                      child: const SizedBox(
+                                                        width: 24,
+                                                        height: 24,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                          color: Color.fromARGB(
+                                                              110,
+                                                              255,
+                                                              255,
+                                                              255),
+                                                          strokeWidth: 2,
+                                                        ),
+                                                      )),
+                                                ],
+                                              ),
+                                            ))
+                                        : Visibility(
+                                            visible: (DateTime.parse(widget
+                                                        .userAlloc[i]['date'])
+                                                    .isAfter(DateTime.now()) ||
+                                                DateTime.parse(widget.userAlloc[i]['date'])
+                                                            .year ==
+                                                        DateTime.now()
+                                                            .year && // Exam today
+                                                    DateTime.parse(widget.userAlloc[i]['date'])
+                                                            .month ==
+                                                        DateTime.now().month &&
+                                                    DateTime.parse(widget
+                                                                    .userAlloc[i]
+                                                                ['date'])
+                                                            .day ==
+                                                        DateTime.now().day &&
+                                                    DateTime.now().hour < 18),
+                                            child: dateButton(
+                                                widget.userAlloc[i]['date'],
+                                                widget.userAlloc[i]['date']
+                                                    .split('-')
+                                                    .last, // Display only the day part
+                                                widget.userAlloc[i]['day']
+                                                    .substring(0,
+                                                        3), // Function to get day of week
+                                                true, // Assuming this value should always be true
+                                                () async {
+                                              setState(() {
+                                                previousDutyErrorMessageExist =
+                                                    false;
+                                              });
+                                              if (selectedDateIndex == i) {
+                                                if (!showInvigilationInfo) {
+                                                  setState(() {
+                                                    examDataLoading = true;
+                                                  });
+                                                  await fetchInitialAttendanceStatus(
+                                                      selectedDateIndex);
+                                                  await grabTeacherNames(
+                                                      selectedDateIndex);
+                                                  initializeCardVisibility(
+                                                      selectedDateIndex);
+                                                  setState(() {
+                                                    showInvigilationInfo =
+                                                        !showInvigilationInfo;
+                                                    examDataLoading = false;
+                                                  });
+                                                } else {
+                                                  setState(() {
+                                                    showInvigilationInfo =
+                                                        !showInvigilationInfo;
+                                                  });
+                                                }
+                                              } else {
+                                                setState(() {
+                                                  selectedDateIndex = i;
+                                                  examDataLoading = true;
+                                                });
+                                                await fetchInitialAttendanceStatus(
+                                                    selectedDateIndex);
+                                                await grabTeacherNames(
+                                                    selectedDateIndex);
+                                                initializeCardVisibility(
+                                                    selectedDateIndex);
+                                                setState(() {
+                                                  showInvigilationInfo = true;
+                                                  examDataLoading = false;
+                                                });
+                                              }
+                                            }),
+                                          ),
                                   ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                    if (widget.userAlloc.isEmpty)
+                    if (widget.userAlloc.isEmpty || // List is empty
+                        !widget.userAlloc.any((allocation) =>
+                            DateTime.parse(allocation['date'])
+                                .isAfter(DateTime.now()) || // No future exams
+                            (DateTime.parse(allocation['date']).year ==
+                                    DateTime.now()
+                                        .year && // No exams today before 6 PM
+                                DateTime.parse(allocation['date']).month ==
+                                    DateTime.now().month &&
+                                DateTime.parse(allocation['date']).day ==
+                                    DateTime.now().day &&
+                                DateTime.now().hour < 18)))
                       const Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: const Text(
+                        padding: EdgeInsets.only(top: 5),
+                        child: Text(
                           'No duties assigned',
                           style: TextStyle(
                             fontSize: 14,
@@ -576,7 +700,14 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                               },
                               child: Text('Close')), */
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
+                              setState(() {
+                                loadingExchangeList = true;
+                              });
+                              await grabTeacherNames(selectedDateIndex);
+                              setState(() {
+                                loadingExchangeList = false;
+                              });
                               showDialog(
                                 context: context,
                                 builder: (BuildContext context) {
@@ -632,7 +763,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                             // Make HTTP POST request
                                             http.post(
                                                 Uri.parse(
-                                                    'http://192.168.1.16:8000/dutychange/'),
+                                                    '${widget.hostURL}/dutychange/'),
                                                 body: {
                                                   'exchange_for':
                                                       widget.userPrn,
@@ -683,15 +814,23 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            child: const Text(
-                              'Exchange Duty',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                                fontFamily: 'Raleway',
-                              ),
-                            ),
+                            child: loadingExchangeList
+                                ? const SizedBox(
+                                    width: 8,
+                                    height: 8,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ))
+                                : const Text(
+                                    'Exchange Duty',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                      fontFamily: 'Raleway',
+                                    ),
+                                  ),
                           ),
                         ],
                       ),
@@ -756,66 +895,98 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              'Attendance',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 10),
-                            ListView.builder(
-                              physics: NeverScrollableScrollPhysics(),
-                              shrinkWrap: true,
-                              itemCount: widget
-                                  .userAlloc[selectedDateIndex]['student_prns']
-                                  .length,
-                              itemBuilder: (BuildContext context, int index) {
-                                var prn = widget.userAlloc[selectedDateIndex]
-                                    ['student_prns'][index];
-
-                                return Card(
-                                  color: Color.fromARGB(255, 242, 242, 242),
-                                  elevation: 1,
-                                  margin: const EdgeInsets.symmetric(
-                                      vertical: 8, horizontal: 16),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(prn,
-                                            style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.normal)),
-                                        Switch(
-                                          value: attendanceStatus.isNotEmpty &&
-                                                  index <
-                                                      attendanceStatus.length
-                                              ? attendanceStatus[index]
-                                              : false,
-                                          onChanged: (bool value) {
-                                            markAttendance(
-                                                prn,
-                                                value ? 1 : 0,
-                                                widget.userAlloc[
-                                                        selectedDateIndex]
-                                                    ['exam_id']);
-                                            setState(() {
-                                              attendanceStatus[index] = value;
-                                            });
-                                          },
-                                          activeColor: const Color(
-                                              0xFF74D4A6), // Color when switch is on (Present)
-                                          inactiveThumbColor: const Color(
-                                              0xFFE46D6D), // Color when switch is off (Absent), // Color when switch is off (Absent)
-                                        ),
-                                      ],
-                                    ),
+                            if (DateTime.parse(
+                                            widget.userAlloc[selectedDateIndex]
+                                                ['date'])
+                                        .year ==
+                                    DateTime.now().year &&
+                                DateTime.parse(
+                                            widget.userAlloc[selectedDateIndex]
+                                                ['date'])
+                                        .month ==
+                                    DateTime.now().month &&
+                                DateTime.parse(
+                                            widget.userAlloc[selectedDateIndex]
+                                                ['date'])
+                                        .day ==
+                                    DateTime.now().day &&
+                                DateTime.now().hour >= 13)
+                              Column(
+                                children: [
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    'Attendance',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold),
                                   ),
-                                );
-                              },
-                            ),
+                                  const SizedBox(height: 10),
+                                  ListView.builder(
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    shrinkWrap: true,
+                                    itemCount: widget
+                                        .userAlloc[selectedDateIndex]
+                                            ['student_prns']
+                                        .length,
+                                    itemBuilder:
+                                        (BuildContext context, int index) {
+                                      var prn =
+                                          widget.userAlloc[selectedDateIndex]
+                                              ['student_prns'][index];
+
+                                      return Card(
+                                        color: const Color.fromARGB(
+                                            255, 242, 242, 242),
+                                        elevation: 1,
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 16),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                prn,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.normal,
+                                                ),
+                                              ),
+                                              Switch(
+                                                value: attendanceStatus
+                                                            .isNotEmpty &&
+                                                        index <
+                                                            attendanceStatus
+                                                                .length
+                                                    ? attendanceStatus[index]
+                                                    : false,
+                                                onChanged: (bool value) {
+                                                  markAttendance(
+                                                      prn,
+                                                      value ? 1 : 0,
+                                                      widget.userAlloc[
+                                                              selectedDateIndex]
+                                                          ['exam_id'],
+                                                      widget.hostURL);
+                                                  setState(() =>
+                                                      attendanceStatus[index] =
+                                                          value);
+                                                },
+                                                activeColor: const Color(
+                                                    0xFF74D4A6), // Present
+                                                inactiveThumbColor: const Color(
+                                                    0xFFE46D6D), // Absent
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -840,6 +1011,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                               ),
                               const SizedBox(height: 20),
                               ListView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
                                 shrinkWrap: true,
                                 itemCount: widget.userNotify.length,
                                 itemBuilder: (context, index) {
@@ -861,80 +1033,96 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                           ),
                         ),
                       const SizedBox(height: 20),
-                      if (widget.userAlloc.isNotEmpty)
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Previous Duty Info',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Raleway',
-                                ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Previous Duty Info',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Raleway',
                               ),
-                              const SizedBox(height: 20),
-                              if (widget.userAlloc.isNotEmpty)
-                                ...widget.userAlloc.map((allocation) {
-                                  DateTime allocDate =
-                                      DateTime.parse(allocation['date']);
-                                  if (allocDate.isBefore(DateTime.now())) {
-                                    String dayOfWeek =
-                                        DateFormat('EEEE').format(allocDate);
-                                    String formattedDate =
-                                        DateFormat('dd/MM/yyyy')
-                                            .format(allocDate);
-                                    String roomName = allocation['room_name'];
-                                    String displayText =
-                                        '$formattedDate - $dayOfWeek  ';
+                            ),
+                            const SizedBox(height: 20),
+                            if (widget.userAlloc.isNotEmpty)
+                              ...widget.userAlloc.map((allocation) {
+                                DateTime allocDate =
+                                    DateTime.parse(allocation['date']);
+                                if (allocDate
+                                    .add(const Duration(hours: 18))
+                                    .isBefore(DateTime.now())) {
+                                  previousDutyErrorMessageExist = true;
+                                  String dayOfWeek =
+                                      DateFormat('EEEE').format(allocDate);
+                                  String formattedDate =
+                                      DateFormat('dd/MM/yyyy')
+                                          .format(allocDate);
+                                  String roomName = allocation['room_name'];
+                                  String displayText =
+                                      '$formattedDate - $dayOfWeek  ';
 
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF2F2F2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(8),
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF2F2F2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    width: double.infinity,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          displayText,
+                                          style: const TextStyle(fontSize: 16),
+                                          textAlign: TextAlign.start,
+                                        ),
+                                        Text(
+                                          roomName,
+                                          style: const TextStyle(fontSize: 16),
+                                          textAlign: TextAlign.end,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                } else {
+                                  if (!previousDutyErrorMessageExist) {
+                                    previousDutyErrorMessageExist = true;
+                                    return const SizedBox(
                                       width: double.infinity,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            displayText,
-                                            style:
-                                                const TextStyle(fontSize: 16),
-                                            textAlign: TextAlign.start,
-                                          ),
-                                          Text(
-                                            roomName,
-                                            style:
-                                                const TextStyle(fontSize: 16),
-                                            textAlign: TextAlign.end,
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  } else {
-                                    return Container(
-                                      width: double.infinity,
-                                      child: const Text(
+                                      child: Text(
                                         'You have not completed any duties in the current term.',
                                         style: TextStyle(fontSize: 14),
                                         textAlign: TextAlign.start,
                                       ),
                                     );
+                                  } else {
+                                    return Container(
+                                      width: double.infinity,
+                                    );
                                   }
-                                }).toList(),
-                            ],
-                          ),
+                                }
+                              }).toList(),
+                            if (widget.userAlloc.isEmpty)
+                              const SizedBox(
+                                width: double.infinity,
+                                child: Text(
+                                  'You have not completed any duties in the current term.',
+                                  style: TextStyle(fontSize: 14),
+                                  textAlign: TextAlign.start,
+                                ),
+                              ),
+                          ],
                         ),
+                      ),
                       const SizedBox(height: 20),
                       Container(
                         decoration: BoxDecoration(
@@ -1004,7 +1192,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                                         final response =
                                                             await http.post(
                                                           Uri.parse(
-                                                              'http://192.168.1.16:8000/exchange_accept/'),
+                                                              '${widget.hostURL}/exchange_accept/'),
                                                           body: {
                                                             'user_prn':
                                                                 widget.userPrn,
@@ -1038,7 +1226,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                                                 title: const Text(
                                                                     'Success'),
                                                                 content: const Text(
-                                                                    'Exchange request accepted successfully.'),
+                                                                    'Exchange request accepted successfully. Please login again for the new changes to reflect.'),
                                                                 actions: <Widget>[
                                                                   TextButton(
                                                                     onPressed:
@@ -1070,16 +1258,18 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                                     style: ButtonStyle(
                                                       backgroundColor:
                                                           WidgetStateProperty
-                                                              .all<Color>(Color
-                                                                  .fromARGB(
+                                                              .all<Color>(
+                                                                  const Color
+                                                                      .fromARGB(
                                                                       255,
                                                                       188,
                                                                       255,
                                                                       216)),
                                                       foregroundColor:
                                                           WidgetStateProperty
-                                                              .all<Color>(Color
-                                                                  .fromARGB(
+                                                              .all<Color>(
+                                                                  const Color
+                                                                      .fromARGB(
                                                                       255,
                                                                       46,
                                                                       46,
@@ -1103,8 +1293,9 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                                                       188)),
                                                       foregroundColor:
                                                           WidgetStateProperty
-                                                              .all<Color>(Color
-                                                                  .fromARGB(
+                                                              .all<Color>(
+                                                                  const Color
+                                                                      .fromARGB(
                                                                       255,
                                                                       46,
                                                                       46,
@@ -1115,7 +1306,7 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                                         final response =
                                                             await http.post(
                                                           Uri.parse(
-                                                              'http://192.168.1.16:8000/exchange_reject/'),
+                                                              '${widget.hostURL}/exchange_reject/'),
                                                           body: {
                                                             'user_prn':
                                                                 widget.userPrn,
@@ -1183,8 +1374,11 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                                 ),
                               ),
                             if (widget.exchangeRequest.isEmpty || !_isVisible)
-                              Text(
-                                  'There are no pending exchange requests to display.'),
+                              const SizedBox(
+                                width: double.infinity,
+                                child: Text(
+                                    'There are no pending exchange requests to display.'),
+                              ),
                           ],
                         ),
                       ),
@@ -1199,8 +1393,8 @@ class TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
-  Widget dateButton(
-      String date, String day, bool isHighlighted, Function() onPressed) {
+  Widget dateButton(String fullDate, String date, String day,
+      bool isHighlighted, Function() onPressed) {
     return Padding(
         padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
         child: Container(
@@ -1230,20 +1424,48 @@ class TeacherDashboardState extends State<TeacherDashboard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Text(
+                    /* Text(
                       date,
                       style: const TextStyle(
                         color: Colors.black,
                         fontSize: 30,
                         fontWeight: FontWeight.w500,
                       ),
+                    ), */
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: RichText(
+                        textAlign: TextAlign.center, // Center the text
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: Color(0xFF242424),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          children: <TextSpan>[
+                            TextSpan(
+                              text: DateFormat(
+                                      'MMM') // Abbreviated month (e.g., JAN)
+                                  .format(DateTime.parse(fullDate))
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                            TextSpan(
+                              text:
+                                  '\n${date.padLeft(2, '0')}', // Day of the month with padding
+                              style: const TextStyle(
+                                  fontSize: 30, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     Text(
                       day,
                       style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 14,
-                      ),
+                          color: Color(0xFF242424),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400),
                     ),
                   ],
                 ),

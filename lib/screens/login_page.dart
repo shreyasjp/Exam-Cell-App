@@ -31,6 +31,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class LoginPageState extends State<LoginPage> {
+  String hostURL = 'http://192.168.1.16:9001';
+  bool isLoggingIn = false;
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
@@ -47,7 +49,7 @@ class LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.16:8000/login/'),
+        Uri.parse('$hostURL/login/'),
         body: {'username': username, 'password': password},
       );
 
@@ -82,6 +84,7 @@ class LoginPageState extends State<LoginPage> {
                 userNotify: userNotify,
                 userAlloc: userAlloc,
                 exchangeRequest: exchangeRequest,
+                hostURL: hostURL,
               ),
             ),
           );
@@ -104,13 +107,21 @@ class LoginPageState extends State<LoginPage> {
           ),
         );
       } else {
+        setState(() {
+          isLoggingIn = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text('Invalid username or password'),
         ));
       }
     } catch (e) {
+      setState(() {
+        isLoggingIn = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error occurred while logging in:$e'),
+        behavior: SnackBarBehavior.floating,
+        content: Text('Error occurred while logging in: $e'),
       ));
     }
   }
@@ -118,10 +129,10 @@ class LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 8, top: 8),
+      bottomNavigationBar: const Padding(
+        padding: EdgeInsets.only(bottom: 8, top: 8),
         child: Text(
-          'Copyright 2024 | Don Xavier',
+          'Copyright \u{00A9} 2024',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,
@@ -188,6 +199,9 @@ class LoginPageState extends State<LoginPage> {
                   padding: const EdgeInsets.only(top: 10),
                   child: ElevatedButton(
                     onPressed: () {
+                      setState(() {
+                        isLoggingIn = true;
+                      });
                       loginUser(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -197,10 +211,18 @@ class LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    child: const Text(
-                      'Continue',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
+                    child: isLoggingIn
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ))
+                        : const Text(
+                            'Continue',
+                            style: TextStyle(fontSize: 16, color: Colors.white),
+                          ),
                   ),
                 ),
               ],
